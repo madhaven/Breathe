@@ -5,11 +5,14 @@ import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.res.Resources;
+import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.SoundEffectConstants;
 import android.view.View;
+import android.widget.CompoundButton;
 import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -23,6 +26,8 @@ public class MainActivity extends AppCompatActivity {
     private Switch autoCancelSwitch;
 
     public int interval, start, stop;
+    public boolean breatheToggled;
+    public boolean notificationToggled;
     public static String TAG = "madhaven";
 
     @Override
@@ -38,6 +43,24 @@ public class MainActivity extends AppCompatActivity {
         breatheToggle = findViewById(R.id.breatheToggle);
         autoCancelSwitch = findViewById(R.id.auto_cancel_switch);
 
+        breatheToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                breatheToggled = b;
+                Log.d(TAG, "toggle : "+breatheToggled);
+                // TODO: set broadcast receivers
+            }
+        });
+
+        autoCancelSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                notificationToggled = b;
+                Log.d(TAG, "notification : "+notificationToggled);
+                // TODO: edit broadcast receivers
+            }
+        });
+
         intervalSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
@@ -48,12 +71,9 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
+            public void onStartTrackingTouch(SeekBar seekBar) { }
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
+            public void onStopTrackingTouch(SeekBar seekBar) { }
         });
 
         startSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -66,14 +86,9 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
+            public void onStartTrackingTouch(SeekBar seekBar) { }
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-
-            }
+            public void onStopTrackingTouch(SeekBar seekBar) { }
         });
 
         stopSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -86,19 +101,15 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-
-            }
-
+            public void onStartTrackingTouch(SeekBar seekBar) { }
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-
-            }
+            public void onStopTrackingTouch(SeekBar seekBar) { }
         });
+
     }
 
     private void playTick(View view) {
-//        view.playSoundEffect(Resource);
+        ;// TODO: SOUND CODE
     }
 
 }
