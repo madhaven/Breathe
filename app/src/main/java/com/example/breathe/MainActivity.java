@@ -1,24 +1,21 @@
 package com.example.breathe;
 
-import androidx.annotation.LongDef;
-import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.AlarmManagerCompat;
 
 import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.Resources;
-import android.media.AudioManager;
+import android.media.AudioAttributes;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
-import android.view.SoundEffectConstants;
 import android.view.View;
 import android.widget.CompoundButton;
 import android.widget.SeekBar;
@@ -35,14 +32,15 @@ public class MainActivity extends AppCompatActivity {
     public AlarmManager breatheAlarm;
     public PendingIntent alarmIntent;
 
-    public int interval, start, stop;
+    public static int interval, start, stop;
     public boolean breatheToggled;
-    public boolean notificationToggled;
+    public static boolean notificationAutoCancel;
     public static String TAG = "madhaven";
+    public static int notificationTimeOut = 10000;
 
     public int alarmIntentRequestCode = 456;
     public static int testIntervalCount = 0;
-    public static String notificationBreatheID = "com.Breathe.NotificationBreatheID";
+    public static String notificationBreatheChannelID = "com.Breathe.NotificationBreatheID";
 
     @SuppressLint("ServiceCast")
     @Override
@@ -57,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
         stopText = findViewById(R.id.stop_text);
         breatheToggle = findViewById(R.id.breatheToggle);
         autoCancelSwitch = findViewById(R.id.auto_cancel_switch);
-        createNotificationChannel();
+        createNotificationChannel(this);
 
         breatheAlarm = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
 //        alarmIntent = PendingIntent.getBroadcast(
@@ -76,7 +74,7 @@ public class MainActivity extends AppCompatActivity {
                     breatheAlarm.setRepeating(
                             AlarmManager.RTC_WAKEUP,
                             0,
-                            interval * AlarmManager.INTERVAL_FIFTEEN_MINUTES/15,
+                            interval * AlarmManager.INTERVAL_FIFTEEN_MINUTES/15 * interval,
                             PendingIntent.getBroadcast(
                                     getApplicationContext(),
                                     alarmIntentRequestCode,
@@ -85,6 +83,7 @@ public class MainActivity extends AppCompatActivity {
                             )
                     );
                 } else {
+                    testIntervalCount = 0;
                     alarmIntent = PendingIntent.getBroadcast(
                             getApplicationContext(),
                             alarmIntentRequestCode,
@@ -105,8 +104,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
                 // handles variables that decided whether or not to let notifications persist
-                notificationToggled = b;
-                Log.d(TAG, "notification : "+notificationToggled);
+                notificationAutoCancel = b;
+                Log.d(TAG, "notification : "+ notificationAutoCancel);
                 // TODO: edit notification stuff
             }
         });
@@ -124,7 +123,7 @@ public class MainActivity extends AppCompatActivity {
             public void onStartTrackingTouch(SeekBar seekBar) { }
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                // TODO: edit alarmmanager variables
+                breatheToggle.setChecked(false);
             }
         });
 
@@ -164,15 +163,22 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void createNotificationChannel() {
+    private void createNotificationChannel(Context context) {
         // Create the NotificationChannel, but only on API 26+ because
         // the NotificationChannel class is new and not in the support library
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
             NotificationChannel channel = new NotificationChannel(
-                    notificationBreatheID,
+                    notificationBreatheChannelID,
                     getString(R.string.breathe_reminder),
-                    NotificationManager.IMPORTANCE_LOW
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setSound(
+                    Uri.parse("android.resource://" + context.getPackageName() + "/" + R.raw.breathe),
+                    new AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .build()
             );
 //            String description = getString(R.string.channel_description);
 //            channel.setDescription(description);
