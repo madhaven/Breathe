@@ -6,4 +6,5 @@
     <string name="start_time">Start Time</string>
     <string name="end_time">End Time</string>
     <string name="auto_cancel_notifications_switch_text">Auto-cancel Notifications</string>
+    <string name="breathe_reminder">Breathe Reminders</string>
 </resources>
