@@ -11,9 +11,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.AudioAttributes;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.util.Log;
 import android.view.View;
 import android.widget.CompoundButton;
@@ -22,12 +25,17 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.ToggleButton;
 
+import java.util.Calendar;
+
 public class MainActivity extends AppCompatActivity {
 
     //UI components
     private TextView intervalText, startText, stopText;
     private ToggleButton breatheToggleButton;
     public static AlarmManager breatheAlarm;
+    private Vibrator vibrator;
+    private SharedPreferences preferences;
+    MediaPlayer tickMediaPlayer;
 
     //App Logic
     public static int interval, start, stop;
@@ -49,38 +57,36 @@ public class MainActivity extends AppCompatActivity {
             alarmIntentRequestCode = 456,
             alarmStartIntentRequestCode = 898,
             alarmStopIntentRequestCode = 231;
+    private boolean
+            rightNow = true;
 
     @SuppressLint("ServiceCast")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.splashscreen);
-//        if (Build.VERSION.SDK_INT < 26)
-            android.os.SystemClock.sleep(2000);
+        android.os.SystemClock.sleep(2000);
         createNotificationChannel(this);
+        vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        tickMediaPlayer = MediaPlayer.create(this, R.raw.tickk);
 
         // obtain shared preferences and set UI values
-        SharedPreferences preferences = getApplication().
+        preferences = getApplication().
                 getSharedPreferences(
                         preferencesUnitedString,
                         Context.MODE_PRIVATE
                 );
         @SuppressLint("CommitPrefEdits") final SharedPreferences.Editor preferenceEditor = preferences.edit();
-        if (preferences.contains(intervalPreferenceString)) {
+        if (preferences.contains(intervalPreferenceString))
             interval = preferences.getInt(intervalPreferenceString, 5);
-        }
-        if (preferences.contains(startPreferenceString)) {
+        if (preferences.contains(startPreferenceString))
             start = preferences.getInt(startPreferenceString, 6);
-        }
-        if (preferences.contains(stopPreferenceString)) {
+        if (preferences.contains(stopPreferenceString))
             stop = preferences.getInt(stopPreferenceString, 18);
-        }
-        if (preferences.contains(autoCancelPreferenceString)) {
+        if (preferences.contains(autoCancelPreferenceString))
             autoCancel = preferences.getBoolean(autoCancelPreferenceString, true);
-        }
-        if (preferences.contains(breatheTogglePreferenceString)) {
+        if (preferences.contains(breatheTogglePreferenceString))
             breatheToggle = preferences.getBoolean(breatheTogglePreferenceString, false);
-        }
 
         setContentView(R.layout.activity_main);
         SeekBar intervalSeek = findViewById(R.id.interval_seek);
@@ -93,6 +99,15 @@ public class MainActivity extends AppCompatActivity {
         Switch autoCancelSwitch = findViewById(R.id.auto_cancel_switch);
         breatheAlarm = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
 
+        intervalSeek.setProgress(interval/5);
+        intervalText.setText(String.valueOf(interval));
+        startSeek.setProgress(start);
+        startText.setText(String.valueOf(start));
+        stopSeek.setProgress(stop);
+        stopText.setText(String.valueOf(stop));
+        autoCancelSwitch.setChecked(autoCancel);
+        breatheToggleButton.setChecked(breatheToggle);
+
         breatheToggleButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             // handles whether or not the reminders are active.
             @Override
@@ -100,8 +115,9 @@ public class MainActivity extends AppCompatActivity {
                 preferenceEditor.putBoolean(breatheTogglePreferenceString, b);
                 preferenceEditor.apply();
                 breatheToggle = b;
-                if (breatheToggle) startAlarm();
-                else stopAlarm();
+                if (breatheToggle) startAlarm(rightNow);
+                else stopAlarm(rightNow);
+                playTick();
                 Log.d(TAG, "breathtoggle : " + breatheToggle);
             }
         });
@@ -113,6 +129,7 @@ public class MainActivity extends AppCompatActivity {
                 autoCancel = b;
                 preferenceEditor.putBoolean(autoCancelPreferenceString, b);
                 preferenceEditor.apply();
+                playTick();
                 Log.d(TAG, "notification : " + autoCancel);
             }
         });
@@ -121,8 +138,8 @@ public class MainActivity extends AppCompatActivity {
             // decides when to start the notifications in a day
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                playTick(seekBar);
-                interval = (i == 0) ? 1 : i * 5;
+                playTick();
+                interval = (i == 0) ? 1 : (i * 5);
                 intervalText.setText(String.valueOf(interval));
             }
 
@@ -143,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
             // decides when to stop the notifications in a day
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                playTick(seekBar);
+                playTick();
                 start = i;
                 startText.setText(String.valueOf(start));
             }
@@ -156,8 +173,7 @@ public class MainActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {
                 preferenceEditor.putInt(startPreferenceString, start);
                 preferenceEditor.apply();
-                startAlarm();
-                Log.d(TAG, "start : " + start);
+                startAlarm(false);
             }
         });
 
@@ -165,7 +181,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
                 // updates the text to show stop time
-                playTick(seekBar);
+                playTick();
                 stop = i;
                 stopText.setText(String.valueOf(stop));
             }
@@ -178,16 +194,15 @@ public class MainActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {
                 preferenceEditor.putInt(stopPreferenceString, stop);
                 preferenceEditor.apply();
-                stopAlarm();
-                Log.d(TAG, "stop : " + stop);
+                stopAlarm(false);
             }
         });
 
-        intervalSeek.setProgress(interval/5);
-        startSeek.setProgress(start);
-        stopSeek.setProgress(stop);
-        autoCancelSwitch.setChecked(autoCancel);
-        breatheToggleButton.setChecked(breatheToggle);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
 
     }
 
@@ -217,39 +232,89 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void playTick(View view) {
-        // plays the ticking sounds when the sliders are in progress
-        ;// TODO: SOUND CODE
+    private void playTick() {
+
+        if (vibrator != null) {
+            if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vibrator.vibrate(VibrationEffect.createOneShot(
+                        500,
+                        VibrationEffect.EFFECT_TICK
+                ));
+            } else {
+                vibrator.vibrate(50);
+            }
+            // plays the ticking sounds when the sliders are in progress
+            if (tickMediaPlayer.isLooping())
+                tickMediaPlayer.stop();
+            tickMediaPlayer.start();
+        }
     }
 
-    private void startAlarm() {
-        breatheAlarm.set(
-                AlarmManager.RTC_WAKEUP,
-                1000,
-                PendingIntent.getBroadcast(
-                        getApplicationContext(),
-                        alarmStartIntentRequestCode,
-                        new Intent(getApplicationContext(), AlarmReceiver.class)
-                                .putExtra("Intention", "startAlarm"),
-                        PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_CANCEL_CURRENT
-                )
-        );
-        // TODO: edit alarmmanager vairables
+    private void startAlarm(boolean immediately) {
+        if (immediately){
+            Log.d(TAG, "startAlarm immediately");
+            sendBroadcast(
+                    new Intent(getApplicationContext(), AlarmReceiver.class)
+                            .putExtra("Intention", "startAlarm")
+            );
+        } else {
+
+            Log.d(TAG, "startAlarm at : "+start);
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTimeInMillis(System.currentTimeMillis() - 1);
+            calendar.set(Calendar.HOUR_OF_DAY, start);
+            calendar.set(Calendar.MINUTE, 0);
+            calendar.set(Calendar.SECOND, 0);
+            Log.d(TAG, "startAlarm: "+calendar.get(Calendar.HOUR_OF_DAY)+" "+calendar.get(Calendar.MINUTE)+" "+calendar.get(Calendar.SECOND));
+
+            breatheAlarm.setRepeating(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.getTimeInMillis(),
+                    24 * 60 * 60 * 1000,
+//                System.currentTimeMillis(),
+//                3/2 *60*1000, //testing with 1.5 minute intervals
+                    PendingIntent.getBroadcast(
+                            getApplicationContext(),
+                            alarmStartIntentRequestCode,
+                            new Intent(getApplicationContext(), AlarmReceiver.class)
+                                    .putExtra("Intention", "startAlarm"),
+                            PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_UPDATE_CURRENT
+                    )
+            );
+        }
     }
 
-    private void stopAlarm() {
-        breatheAlarm.set(
-                AlarmManager.RTC_WAKEUP,
-                1000,
-                PendingIntent.getBroadcast(
-                        getApplicationContext(),
-                        alarmStopIntentRequestCode,
-                        new Intent(getApplicationContext(), AlarmReceiver.class)
-                                .putExtra("Intention", "stopAlarm"),
-                        PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_CANCEL_CURRENT
-                )
-        );
-        // TODO: edit alarm manager variables
+    private void stopAlarm(boolean immediately) {
+        if (immediately){
+            Log.d(TAG, "stopAlarm immediately");
+            sendBroadcast(
+                    new Intent(getApplicationContext(), AlarmReceiver.class)
+                            .putExtra("Intention", "stopAlarm")
+            );
+        } else {
+
+            Log.d(TAG, "stopAlarm at : "+stop);
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTimeInMillis(System.currentTimeMillis() - 1);
+            calendar.set(Calendar.HOUR_OF_DAY, stop);
+            calendar.set(Calendar.MINUTE, 0);
+            calendar.set(Calendar.SECOND, 0);
+
+            breatheAlarm.setRepeating(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.getTimeInMillis(),
+                    24 * 60 * 60 * 1000,
+//                System.currentTimeMillis()+90*1000,
+//                3/2 *60*1000, //testing with 1.5 minute intervals
+                    PendingIntent.getBroadcast(
+                            getApplicationContext(),
+                            alarmStopIntentRequestCode,
+                            new Intent(getApplicationContext(), AlarmReceiver.class)
+                                    .putExtra("Intention", "stopAlarm"),
+                            PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_UPDATE_CURRENT
+                    )
+            );
+        }
     }
 
 }
