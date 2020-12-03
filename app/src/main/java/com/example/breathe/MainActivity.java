@@ -56,7 +56,8 @@ public class MainActivity extends AppCompatActivity {
     public static int
             alarmIntentRequestCode = 456,
             alarmStartIntentRequestCode = 898,
-            alarmStopIntentRequestCode = 231;
+            alarmStopIntentRequestCode = 231,
+            alarmStopNotificationIntentRequestCode = 98721;
     private boolean
             rightNow = true;
 

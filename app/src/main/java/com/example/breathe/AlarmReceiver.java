@@ -14,13 +14,15 @@ import android.os.Build;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.core.app.AlarmManagerCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 import static com.example.breathe.MainActivity.TAG;
 import static com.example.breathe.MainActivity.alarmIntentRequestCode;
+import static com.example.breathe.MainActivity.alarmStopIntentRequestCode;
+import static com.example.breathe.MainActivity.alarmStopNotificationIntentRequestCode;
 import static com.example.breathe.MainActivity.autoCancelPreferenceString;
-import static com.example.breathe.MainActivity.breatheAlarm;
 import static com.example.breathe.MainActivity.breatheTogglePreferenceString;
 import static com.example.breathe.MainActivity.interval;
 import static com.example.breathe.MainActivity.notificationBreatheChannelIDString;
@@ -29,9 +31,13 @@ import static com.example.breathe.MainActivity.preferencesUnitedString;
 
 public class AlarmReceiver extends BroadcastReceiver {
 
+    private AlarmManager breatheAlarm;
+
     @Override
     public void onReceive(Context context, Intent intent) {
         Log.d(TAG, "Broadcast Received");
+
+        breatheAlarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 
         String intention = intent.getStringExtra("Intention");
         if (intention == null) intention = "nothing";
@@ -98,8 +104,11 @@ public class AlarmReceiver extends BroadcastReceiver {
                     );
             @SuppressLint("CommitPrefEdits") final SharedPreferences.Editor preferenceEditor = preferences.edit();
             if (preferences.contains(breatheTogglePreferenceString)) {
-                preferenceEditor.putBoolean(breatheTogglePreferenceString, true);
+                preferenceEditor.putBoolean(breatheTogglePreferenceString, false);
                 preferenceEditor.apply();
+            } else {
+                Log.d(TAG, "stopAlarms: cannot edit preferences");
+                Toast.makeText(context, "stopAlarms: cannot edit preferences", Toast.LENGTH_SHORT).show();
             }
 
         } else {
@@ -115,6 +124,16 @@ public class AlarmReceiver extends BroadcastReceiver {
                 .setSmallIcon(R.drawable.ic_lungs)
                 .setContentTitle("Breathe Consciously")
                 .setSound(Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + context.getPackageName() + "/" + R.raw.breathe))
+                .addAction(
+                        R.drawable.ic_delete_black_24dp,
+                        "Stop Reminders",
+                        PendingIntent.getBroadcast(
+                                context,
+                                alarmStopNotificationIntentRequestCode,
+                                new Intent(context, AlarmReceiver.class)
+                                        .putExtra("Intention", "stopAlarm"),
+                                PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_CANCEL_CURRENT
+                        ))
                 .setContentIntent(
                         PendingIntent.getActivity(
                                 context,
