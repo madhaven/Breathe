@@ -1,6 +1,8 @@
 package com.example.breathe;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.AlarmManagerCompat;
 
 import android.annotation.SuppressLint;
 import android.app.AlarmManager;
@@ -10,15 +12,16 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Resources;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PersistableBundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.util.Log;
-import android.view.View;
 import android.widget.CompoundButton;
 import android.widget.SeekBar;
 import android.widget.Switch;
@@ -32,7 +35,7 @@ public class MainActivity extends AppCompatActivity {
     //UI components
     private TextView intervalText, startText, stopText;
     private ToggleButton breatheToggleButton;
-    public static AlarmManager breatheAlarm;
+    private AlarmManager breatheAlarm;
     private Vibrator vibrator;
     private SharedPreferences preferences;
     MediaPlayer tickMediaPlayer;
@@ -44,34 +47,41 @@ public class MainActivity extends AppCompatActivity {
     public static int notificationTimeOut = 10000;
 
     //Keys
-    public static String
-            TAG = "madhaven",
-            preferencesUnitedString = "the United string of preference",
-            intervalPreferenceString = "intervalString",
-            breatheTogglePreferenceString = "breatheToggleString",
-            autoCancelPreferenceString = "notificationAutoCancelString",
-            startPreferenceString = "startString",
-            stopPreferenceString = "stopString",
-            notificationBreatheChannelIDString = "com.Breathe.NotificationBreatheID";
+    private static String TAG = "madhaven";
+    private String
+            preferencesUnitedString,
+            intervalPreferenceString,
+            breatheTogglePreferenceString,
+            autoCancelPreferenceString,
+            startPreferenceString,
+            stopPreferenceString,
+            notificationBreatheChannelIDString;
     public static int
             alarmIntentRequestCode = 456,
             alarmStartIntentRequestCode = 898,
             alarmStopIntentRequestCode = 231,
             alarmStopNotificationIntentRequestCode = 98721;
-    private boolean
-            rightNow = true;
+    public boolean
+            rightNow = true,
+            later = false;
+
 
     @SuppressLint("ServiceCast")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.splashscreen);
-        android.os.SystemClock.sleep(2000);
-        createNotificationChannel(this);
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         tickMediaPlayer = MediaPlayer.create(this, R.raw.tickk);
 
         // obtain shared preferences and set UI values
+        preferencesUnitedString = getString(R.string.preferencesUnitedString);
+        intervalPreferenceString = getString(R.string.intervalPreferenceString);
+        breatheTogglePreferenceString = getString(R.string.breatheTogglePreferenceString);
+        autoCancelPreferenceString = getString(R.string.autoCancelPreferenceString);
+        startPreferenceString = getString(R.string.startPreferenceString);
+        stopPreferenceString = getString(R.string.stopPreferenceString);
+        notificationBreatheChannelIDString = getString(R.string.notificationBreatheChannelIDString);
         preferences = getApplication().
                 getSharedPreferences(
                         preferencesUnitedString,
@@ -88,6 +98,7 @@ public class MainActivity extends AppCompatActivity {
             autoCancel = preferences.getBoolean(autoCancelPreferenceString, true);
         if (preferences.contains(breatheTogglePreferenceString))
             breatheToggle = preferences.getBoolean(breatheTogglePreferenceString, false);
+        createNotificationChannel(this.getApplicationContext());
 
         setContentView(R.layout.activity_main);
         SeekBar intervalSeek = findViewById(R.id.interval_seek);
@@ -116,10 +127,10 @@ public class MainActivity extends AppCompatActivity {
                 preferenceEditor.putBoolean(breatheTogglePreferenceString, b);
                 preferenceEditor.apply();
                 breatheToggle = b;
-                if (breatheToggle) startAlarm(rightNow);
-                else stopAlarm(rightNow);
+                if (breatheToggle) scheduleAlarm(-1, getApplicationContext(), breatheAlarm);
+                else scheduleAlarmStop(-1, getApplicationContext(), breatheAlarm);
                 playTick();
-                Log.d(TAG, "breathtoggle : " + breatheToggle);
+                Log.d(TAG, "MA: breathtoggle : " + breatheToggle);
             }
         });
 
@@ -131,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
                 preferenceEditor.putBoolean(autoCancelPreferenceString, b);
                 preferenceEditor.apply();
                 playTick();
-                Log.d(TAG, "notification : " + autoCancel);
+                Log.d(TAG, "MA: notification : " + autoCancel);
             }
         });
 
@@ -153,7 +164,7 @@ public class MainActivity extends AppCompatActivity {
                 preferenceEditor.putInt(intervalPreferenceString, interval);
                 preferenceEditor.apply();
                 breatheToggleButton.setChecked(false);
-                Log.d(TAG, "interval : " + interval);
+                Log.d(TAG, "MA: interval : " + interval);
             }
         });
 
@@ -174,7 +185,7 @@ public class MainActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {
                 preferenceEditor.putInt(startPreferenceString, start);
                 preferenceEditor.apply();
-                startAlarm(false);
+                scheduleAlarm(start, getApplicationContext(), breatheAlarm);
             }
         });
 
@@ -195,15 +206,9 @@ public class MainActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {
                 preferenceEditor.putInt(stopPreferenceString, stop);
                 preferenceEditor.apply();
-                stopAlarm(false);
+                scheduleAlarmStop(stop, getApplicationContext(), breatheAlarm);
             }
         });
-
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
 
     }
 
@@ -218,17 +223,17 @@ public class MainActivity extends AppCompatActivity {
                     NotificationManager.IMPORTANCE_HIGH
             );
             channel.setSound(
-                    Uri.parse("android.resource://" + context.getPackageName() + "/" + R.raw.breathe),
+                    Uri.parse("android.resource://" + this.getPackageName() + "/" + R.raw.breathe),
                     new AudioAttributes.Builder()
                             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                             .setUsage(AudioAttributes.USAGE_ALARM)
                             .build()
             );
-//            String description = getString(R.string.channel_description);
-//            channel.setDescription(description);
+            String description = getString(R.string.channel_description);
+            channel.setDescription(description);
             // Register the channel with the system; you can't change the importance
             // or other notification behaviors after this
-            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            NotificationManager notificationManager = context.getSystemService(NotificationManager.class);
             notificationManager.createNotificationChannel(channel);
         }
     }
@@ -251,22 +256,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void startAlarm(boolean immediately) {
-        if (immediately){
-            Log.d(TAG, "startAlarm immediately");
-            sendBroadcast(
-                    new Intent(getApplicationContext(), AlarmReceiver.class)
+    public static void scheduleAlarm(int time, Context context, AlarmManager breatheAlarm) {
+        if (time==-1){
+            Log.d(TAG, "MA: scheduleAlarm immediately");
+            context.sendBroadcast(
+                    new Intent(context, AlarmReceiver.class)
                             .putExtra("Intention", "startAlarm")
             );
         } else {
 
-            Log.d(TAG, "startAlarm at : "+start);
+            Log.d(TAG, "MA: scheduleAlarm at : "+time);
             Calendar calendar = Calendar.getInstance();
             calendar.setTimeInMillis(System.currentTimeMillis() - 1);
-            calendar.set(Calendar.HOUR_OF_DAY, start);
+            calendar.set(Calendar.DATE, calendar.get(Calendar.DATE)+1);
+            calendar.set(Calendar.HOUR_OF_DAY, time);
             calendar.set(Calendar.MINUTE, 0);
             calendar.set(Calendar.SECOND, 0);
-            Log.d(TAG, "startAlarm: "+calendar.get(Calendar.HOUR_OF_DAY)+" "+calendar.get(Calendar.MINUTE)+" "+calendar.get(Calendar.SECOND));
+            Log.d(TAG, "MA: scheduleAlarm: "+calendar.get(Calendar.HOUR_OF_DAY)+" "+calendar.get(Calendar.MINUTE)+" "+calendar.get(Calendar.SECOND));
 
             breatheAlarm.setRepeating(
                     AlarmManager.RTC_WAKEUP,
@@ -275,9 +281,9 @@ public class MainActivity extends AppCompatActivity {
 //                System.currentTimeMillis(),
 //                3/2 *60*1000, //testing with 1.5 minute intervals
                     PendingIntent.getBroadcast(
-                            getApplicationContext(),
+                            context,
                             alarmStartIntentRequestCode,
-                            new Intent(getApplicationContext(), AlarmReceiver.class)
+                            new Intent(context, AlarmReceiver.class)
                                     .putExtra("Intention", "startAlarm"),
                             PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_UPDATE_CURRENT
                     )
@@ -285,19 +291,19 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void stopAlarm(boolean immediately) {
-        if (immediately){
-            Log.d(TAG, "stopAlarm immediately");
-            sendBroadcast(
-                    new Intent(getApplicationContext(), AlarmReceiver.class)
+    public static void scheduleAlarmStop(int time, Context context, AlarmManager breatheAlarm) {
+        if (time==-1){
+            Log.d(TAG, "MA: scheduleAlarmStop immediately");
+            context.sendBroadcast(
+                    new Intent(context, AlarmReceiver.class)
                             .putExtra("Intention", "stopAlarm")
             );
         } else {
 
-            Log.d(TAG, "stopAlarm at : "+stop);
+            Log.d(TAG, "MA: scheduleAlarmStop at : "+time);
             Calendar calendar = Calendar.getInstance();
             calendar.setTimeInMillis(System.currentTimeMillis() - 1);
-            calendar.set(Calendar.HOUR_OF_DAY, stop);
+            calendar.set(Calendar.HOUR_OF_DAY, time);
             calendar.set(Calendar.MINUTE, 0);
             calendar.set(Calendar.SECOND, 0);
 
@@ -308,9 +314,9 @@ public class MainActivity extends AppCompatActivity {
 //                System.currentTimeMillis()+90*1000,
 //                3/2 *60*1000, //testing with 1.5 minute intervals
                     PendingIntent.getBroadcast(
-                            getApplicationContext(),
+                            context,
                             alarmStopIntentRequestCode,
-                            new Intent(getApplicationContext(), AlarmReceiver.class)
+                            new Intent(context, AlarmReceiver.class)
                                     .putExtra("Intention", "stopAlarm"),
                             PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_UPDATE_CURRENT
                     )

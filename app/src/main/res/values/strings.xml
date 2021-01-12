@@ -7,4 +7,13 @@
     <string name="end_time">End Time</string>
     <string name="auto_cancel_notifications_switch_text">Auto-cancel Notifications</string>
     <string name="breathe_reminder">Breathe Reminders</string>
+
+    <string name="preferencesUnitedString">the United string of preference</string>
+    <string name="intervalPreferenceString">intervalString</string>
+    <string name="breatheTogglePreferenceString">breatheToggleString</string>
+    <string name="autoCancelPreferenceString">notificationAutoCancelString</string>
+    <string name="startPreferenceString">startString</string>
+    <string name="stopPreferenceString">stopString</string>
+    <string name="notificationBreatheChannelIDString">com.Breathe.NotificationBreatheID</string>
+    <string name="channel_description">primary notification channel</string>
 </resources>
